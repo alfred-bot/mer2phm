@@ -24,6 +24,18 @@ local function ban_user(user_id, chat_id)
   kick_user(user_id, chat_id)
 end
 
+local function unban_user(user_id, chat_id)
+  local hash = 'banned:'..chat_id..':'..user_id
+  redis:del(hash)
+end
+
+local function is_banned(user_id, chat_id)
+  local hash =  'banned:'..chat_id..':'..user_id
+  local banned = redis:get(hash)
+  return banned or false
+end
+
+
 local function superban_user(user_id, chat_id)
   -- Save to redis
   local hash =  'superbanned:'..user_id
@@ -43,6 +55,71 @@ local function is_super_banned(user_id)
     local superbanned = redis:get(hash)
     return superbanned or false
 end
+
+local function action_by_reply(extra, success, result)
+  local msg = result
+  local chat_id = msg.to.id
+  local user_id = msg.from.id
+  local chat = 'chat#id'..msg.to.id
+  local user = 'user#id'..msg.from.id
+  if result.to.type == 'chat' and not is_sudo(msg) then
+    if extra.match == 'kick' then
+      chat_del_user(chat, user, ok_cb, false)
+    elseif extra.match == 'ban' then
+      ban_user(user_id, chat_id)
+      send_msg(chat, 'User '..user_id..' banned', ok_cb,  true)
+    elseif extra.match == 'unban' then
+      unban_user(user_id, chat_id)
+      send_msg(chat, 'User '..user_id..' unbanned', ok_cb,  true)
+    end
+  else
+    return 'Use This in Your Groups'
+  end
+end
+
+
+local function resolve_username(extra, success, result)
+  if success == 1 then
+    local msg = extra.msg
+    local chat_id = msg.to.id
+    local user_id = result.id
+    local chat = 'chat#id'..msg.to.id
+    local user = 'user#id'..result.id
+    if msg.to.type == 'chat' then
+      -- check if sudo users
+      local is_sudoers = false
+      for v,username in pairs(_config.sudo_users) do
+        if username == user_id then
+          is_sudoers = true
+        end
+      end
+      
+      
+       if not is_sudoers then
+        if extra.match == 'kick' then
+          chat_del_user(chat, user, ok_cb, false)
+        elseif extra.match == 'ban' then
+          ban_user(user_id, chat_id)
+          send_msg(chat, 'User @'..result.username..' banned', ok_cb,  true)
+        elseif extra.match == 'unban' then
+          unban_user(user_id, chat_id)
+          send_msg(chat, 'User @'..result.username..' unbanned', ok_cb,  true)
+        end
+      end
+    else
+      return 'Use This in Your Groups.'
+    end
+  end
+end
+
+
+      
+
+
+
+
+
+
 
 local function pre_process(msg)
 
